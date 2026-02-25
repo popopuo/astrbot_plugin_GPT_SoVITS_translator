@@ -140,7 +140,7 @@ class GPTSoVITSPlugin(Star):
         )
         if not bool(res):
             return
-        chain.insert(0, self._to_record(res))
+        chain.append(self._to_record(res))
 
     @filter.command("说", alias={"gsv", "GSV"})
     async def on_command(self, event: AstrMessageEvent):
