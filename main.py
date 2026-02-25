@@ -215,6 +215,13 @@ class GPTSoVITSPlugin(Star):
             message(string): 要讲的话
         """
         try:
+            # 当启用“日常自动TTS（非 tool 模式）”时，禁用该 tool，避免 Agent 额外调用导致重复语音。
+            if self.cfg.translate.enabled_llm and (not self.cfg.translate.only_llm_tool):
+                logger.debug(
+                    "[gsv_tts] skipped: auto TTS mode enabled (only_llm_tool=False)"
+                )
+                return "gsv_tts disabled in auto TTS mode"
+
             text = message
 
             logger.debug(f"[gsv_tts] tool called, len={len(text) if text else 0}")
