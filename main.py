@@ -71,18 +71,23 @@ class GPTSoVITSPlugin(Star):
     async def on_decorating_result(self, event: AstrMessageEvent):
         """消息入口"""
         if not self.cfg.enabled:
+            logger.debug("[auto_tts] skip: plugin disabled")
             return
         cfg = self.cfg.auto
 
         result = event.get_result()
         if not result:
+            logger.debug("[auto_tts] skip: no result")
             return
         chain = result.chain
         if not chain:
+            logger.debug("[auto_tts] skip: empty chain")
             return
         if cfg.only_llm_result and not result.is_llm_result():
+            logger.debug("[auto_tts] skip: only_llm_result=True and not LLM result")
             return
         if random.random() > cfg.tts_prob:
+            logger.debug("[auto_tts] skip: probability not hit")
             return
 
         # 收集所有Plain文本片段
@@ -93,6 +98,7 @@ class GPTSoVITSPlugin(Star):
 
         # 仅允许只含有Plain的消息链通过
         if len(plain_texts) != len(chain):
+            logger.debug("[auto_tts] skip: chain contains non-Plain components")
             return
 
         # 合并所有Plain文本
@@ -120,6 +126,7 @@ class GPTSoVITSPlugin(Star):
 
         # 仅允许一定长度以下的文本通过
         if len(combined_text) > cfg.max_msg_len:
+            logger.debug("[auto_tts] skip: text too long")
             return
 
         params = await self._get_emotion_params(event, combined_text)
@@ -139,8 +146,10 @@ class GPTSoVITSPlugin(Star):
             use_cache=not bypass_cache,
         )
         if not bool(res):
+            logger.debug("[auto_tts] skip: TTS inference failed")
             return
         chain.append(self._to_record(res))
+        logger.debug("[auto_tts] TTS appended to chain")
 
     @filter.command("说", alias={"gsv", "GSV"})
     async def on_command(self, event: AstrMessageEvent):
@@ -148,14 +157,47 @@ class GPTSoVITSPlugin(Star):
         if not self.cfg.enabled:
             return
 
-        text = event.message_str.partition(" ")[2]
-        res = await self.service.inference(text)
+        original_text = event.message_str.partition(" ")[2]
+
+        text = original_text
+        bypass_cache = False
+        translated_ok = False
+
+        if self.cfg.translate.enabled_llm and (not self.cfg.translate.only_llm_tool):
+            logger.debug(
+                f"[say] translating to target_lang={self.cfg.translate.target_lang}"
+            )
+            translated = await self.translator.translate(
+                event,
+                text=text,
+                target_lang=self.cfg.translate.target_lang,
+            )
+            if translated:
+                text = translated
+                translated_ok = True
+                logger.debug(f"[say] translation ok, len={len(text)}")
+            else:
+                logger.debug("[say] translation skipped/failed, fallback to original")
+            bypass_cache = True
+
+        params = await self._get_emotion_params(event, text)
+
+        if (
+            self.cfg.translate.enabled_llm
+            and (not self.cfg.translate.only_llm_tool)
+            and translated_ok
+            and self.cfg.translate.target_lang in {"zh", "en", "ja", "ko"}
+        ):
+            params = params.copy() if params else {}
+            params["text_lang"] = self.cfg.translate.target_lang
+
+        res = await self.service.inference(text, extra_params=params, use_cache=not bypass_cache)
 
         if not bool(res):
             yield event.plain_result(res.error)
             return
 
-        yield event.chain_result([self._to_record(res)])
+        yield event.chain_result([Plain(original_text), self._to_record(res)])
 
     @filter.command("重启GSV", alias={"重启gsv"})
     async def tts_control(self, event: AstrMessageEvent):
