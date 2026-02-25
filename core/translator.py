@@ -1,7 +1,7 @@
 import json
 
 from astrbot.api import logger
-from astrbot.core.platform.astr_message_event import AstrMessageEvent
+from astrbot.core.platform import AstrMessageEvent
 
 from .config import PluginConfig
 

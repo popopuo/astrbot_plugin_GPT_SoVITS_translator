@@ -142,7 +142,12 @@ class GPTSoVITSPlugin(Star):
         try:
             text = message
 
+            logger.debug(f"[gsv_tts] tool called, len={len(text) if text else 0}")
+
             if self.cfg.translate.enabled_llm and self.cfg.translate.only_llm_tool:
+                logger.debug(
+                    f"[gsv_tts] translating to target_lang={self.cfg.translate.target_lang}"
+                )
                 translated = await self.translator.translate(
                     event,
                     text=text,
@@ -150,6 +155,9 @@ class GPTSoVITSPlugin(Star):
                 )
                 if translated:
                     text = translated
+                    logger.debug(f"[gsv_tts] translation ok, len={len(text)}")
+                else:
+                    logger.debug("[gsv_tts] translation skipped/failed, fallback to original")
 
             params = await self._get_emotion_params(event, text)
 
@@ -161,6 +169,7 @@ class GPTSoVITSPlugin(Star):
                 params = params.copy() if params else {}
                 params["text_lang"] = self.cfg.translate.target_lang
 
+            logger.debug(f"[gsv_tts] calling tts, len={len(text) if text else 0}")
             res = await self.service.inference(text, extra_params=params)
             if not bool(res):
                 return res.error
