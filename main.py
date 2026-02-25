@@ -98,16 +98,49 @@ class GPTSoVITSPlugin(Star):
         # 合并所有Plain文本
         combined_text = "\n".join(plain_texts)
 
+        bypass_cache = False
+        translated_ok = False
+
+        if self.cfg.translate.enabled_llm and (not self.cfg.translate.only_llm_tool):
+            logger.debug(
+                f"[auto_tts] translating to target_lang={self.cfg.translate.target_lang}"
+            )
+            translated = await self.translator.translate(
+                event,
+                text=combined_text,
+                target_lang=self.cfg.translate.target_lang,
+            )
+            if translated:
+                combined_text = translated
+                translated_ok = True
+                logger.debug(f"[auto_tts] translation ok, len={len(combined_text)}")
+            else:
+                logger.debug("[auto_tts] translation skipped/failed, fallback to original")
+            bypass_cache = True
+
         # 仅允许一定长度以下的文本通过
         if len(combined_text) > cfg.max_msg_len:
             return
 
         params = await self._get_emotion_params(event, combined_text)
-        res = await self.service.inference(combined_text, extra_params=params)
+
+        if (
+            self.cfg.translate.enabled_llm
+            and (not self.cfg.translate.only_llm_tool)
+            and translated_ok
+            and self.cfg.translate.target_lang in {"zh", "en", "ja", "ko"}
+        ):
+            params = params.copy() if params else {}
+            params["text_lang"] = self.cfg.translate.target_lang
+
+        res = await self.service.inference(
+            combined_text,
+            extra_params=params,
+            use_cache=not bypass_cache,
+        )
         if not bool(res):
             return
-        chain.clear()
-        chain.append(self._to_record(res))
+        chain.insert(0, self._to_record(res))
 
     @filter.command("说", alias={"gsv", "GSV"})
     async def on_command(self, event: AstrMessageEvent):
