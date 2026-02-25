@@ -65,13 +65,44 @@ class TextTranslator:
         return system_prompt, prompt
 
     def _parse_llm_response(self, text: str) -> str:
+        if not text:
+            return ""
+
+        raw = text.strip()
+
+        # 1) 优先按严格 JSON 解析
         try:
-            data = json.loads(text)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"LLM 返回非 JSON: {text}") from e
+            data = json.loads(raw)
+            translated = data.get("text") if isinstance(data, dict) else None
+            if translated and isinstance(translated, str):
+                return translated.strip()
+        except json.JSONDecodeError:
+            pass
+        except Exception as e:
+            logger.debug(f"解析翻译 JSON 失败，将尝试按纯文本处理: {e}")
 
-        translated = data.get("text")
-        if not translated or not isinstance(translated, str):
-            raise ValueError(f"LLM JSON 缺少或非法 text 字段: {data}")
+        # 2) 兼容模型输出 ```json ... ``` / ``` ... ``` 代码块
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+            if len(lines) >= 2 and lines[0].startswith("```"):
+                # 去掉首尾 fence
+                end_idx = None
+                for i in range(len(lines) - 1, -1, -1):
+                    if lines[i].strip().startswith("```"):
+                        end_idx = i
+                        break
+                if end_idx is not None and end_idx > 0:
+                    raw = "\n".join(lines[1:end_idx]).strip()
 
-        return translated.strip()
+        # 3) 再尝试一次 JSON（有些模型会把 JSON 包在代码块里）
+        try:
+            data = json.loads(raw)
+            translated = data.get("text") if isinstance(data, dict) else None
+            if translated and isinstance(translated, str):
+                return translated.strip()
+        except Exception:
+            pass
+
+        # 4) 最后回退：把整个输出当翻译结果
+        logger.debug(f"翻译返回非 JSON，按纯文本采用: {raw[:200]}")
+        return raw
