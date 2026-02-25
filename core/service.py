@@ -38,6 +38,8 @@ class GPTSoVITSService:
         self,
         text: str,
         extra_params: dict[str, Any] | None = None,
+        *,
+        use_cache: bool = True,
     ) -> GSVRequestResult:
         """TTS 推理"""
         params = self.default_params.copy()
@@ -51,16 +53,17 @@ class GPTSoVITSService:
             params.update(filtered_params)
             logger.debug(f"已更新已有参数: {filtered_params}")
 
-        cached_audio = self.local_data.get_cached_audio(params)
-        if cached_audio:
-            cache_path, cached_data = cached_audio
-            logger.debug("命中缓存，跳过 TTS 请求")
-            return GSVRequestResult(
-                ok=True,
-                data=cached_data,
-                text=str(params.get("text", "")),
-                file_path=str(cache_path),
-            )
+        if use_cache:
+            cached_audio = self.local_data.get_cached_audio(params)
+            if cached_audio:
+                cache_path, cached_data = cached_audio
+                logger.debug("命中缓存，跳过 TTS 请求")
+                return GSVRequestResult(
+                    ok=True,
+                    data=cached_data,
+                    text=str(params.get("text", "")),
+                    file_path=str(cache_path),
+                )
 
         logger.debug(f"向 GSV 发起 TTS 请求，参数: {params}")
         result = await self.client.tts(params)

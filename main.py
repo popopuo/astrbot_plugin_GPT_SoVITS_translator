@@ -144,6 +144,8 @@ class GPTSoVITSPlugin(Star):
 
             logger.debug(f"[gsv_tts] tool called, len={len(text) if text else 0}")
 
+            bypass_cache = False
+
             if self.cfg.translate.enabled_llm and self.cfg.translate.only_llm_tool:
                 logger.debug(
                     f"[gsv_tts] translating to target_lang={self.cfg.translate.target_lang}"
@@ -159,6 +161,8 @@ class GPTSoVITSPlugin(Star):
                 else:
                     logger.debug("[gsv_tts] translation skipped/failed, fallback to original")
 
+                bypass_cache = True
+
             params = await self._get_emotion_params(event, text)
 
             if (
@@ -170,7 +174,11 @@ class GPTSoVITSPlugin(Star):
                 params["text_lang"] = self.cfg.translate.target_lang
 
             logger.debug(f"[gsv_tts] calling tts, len={len(text) if text else 0}")
-            res = await self.service.inference(text, extra_params=params)
+            res = await self.service.inference(
+                text,
+                extra_params=params,
+                use_cache=not bypass_cache,
+            )
             if not bool(res):
                 return res.error
             seg = self._to_record(res)
