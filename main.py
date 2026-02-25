@@ -47,7 +47,7 @@ class GPTSoVITSPlugin(Star):
         if not res.data:
             raise ValueError("无法获取结果数据")
 
-        b64 = base64.urlsafe_b64encode(res.data).decode()
+        b64 = base64.b64encode(res.data).decode()
         return Record.fromBase64(b64)
 
 
