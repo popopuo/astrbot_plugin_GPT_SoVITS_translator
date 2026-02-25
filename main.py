@@ -145,6 +145,7 @@ class GPTSoVITSPlugin(Star):
             logger.debug(f"[gsv_tts] tool called, len={len(text) if text else 0}")
 
             bypass_cache = False
+            translated_ok = False
 
             if self.cfg.translate.enabled_llm and self.cfg.translate.only_llm_tool:
                 logger.debug(
@@ -157,6 +158,7 @@ class GPTSoVITSPlugin(Star):
                 )
                 if translated:
                     text = translated
+                    translated_ok = True
                     logger.debug(f"[gsv_tts] translation ok, len={len(text)}")
                 else:
                     logger.debug("[gsv_tts] translation skipped/failed, fallback to original")
@@ -168,6 +170,7 @@ class GPTSoVITSPlugin(Star):
             if (
                 self.cfg.translate.enabled_llm
                 and self.cfg.translate.only_llm_tool
+                and translated_ok
                 and self.cfg.translate.target_lang in {"zh", "en", "ja", "ko"}
             ):
                 params = params.copy() if params else {}
